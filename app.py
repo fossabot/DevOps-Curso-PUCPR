@@ -35,10 +35,10 @@ async def tarefas():
     lista_somente_id_titulo = []
 
     for tarefa in TAREFAS:
-        id_tarefa = tarefa['id_tarefa']
+        id_tarefa = tarefa['id']
         titulo_tarefa = tarefa['titulo']
 
-        lista_somente_id_titulo.append({id_tarefa: titulo_tarefa})
+        lista_somente_id_titulo.append({str(id_tarefa): titulo_tarefa})
 
     return lista_somente_id_titulo
 
@@ -53,7 +53,7 @@ async def post_tarefa(titulo: str, descricao: str):
     return {"mensagem": "OK"}
 
 # GET /tarefas/{id}: Visualizar tarefa específica
-@APP.get("/tarefas/{id}")
+@APP.get("/tarefas/{id_tarefa}")
 async def tarefa_especifica(id_tarefa: int):
     """Rota para a visualização de tarefas específicas"""
     for tarefa in TAREFAS:
@@ -74,7 +74,7 @@ async def concluir_tarefa(id_tarefa: int):
 
             try:
                 _ = requests.post(
-                    f"http://localhost:8000/notificar?id={id}&titulo={titulo}",
+                    f"http://localhost:8000/notificar?id={id_tarefa}&titulo={titulo}",
                     timeout=1
                 )
             except RequestConnectionError as e:
@@ -83,7 +83,7 @@ async def concluir_tarefa(id_tarefa: int):
 
     return {"mensagem": "Tarefa não existe"}
 # DELETE /tarefas/{id}: Exclui tarefa
-@APP.delete("/tarefas/{id}")
+@APP.delete("/tarefas/{id_tarefa}")
 async def apagar_tarefa(id_tarefa: int):
     """ Rota para deletar tarefas """
     indice = 0
