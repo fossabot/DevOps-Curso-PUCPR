@@ -6,7 +6,7 @@ APP = FastAPI()
 TAREFAS = []
 
 # Estrutura da tarefa
-"""
+""" 
 {
     "id" -> int,
     "titulo" -> str,
@@ -15,29 +15,31 @@ TAREFAS = []
     "criada_em" -> datetime
 }
 """
+
 def criar_tarefa(titulo, descricao):
     return {
         "id": len(TAREFAS),
         "titulo": titulo,
         "descricao": descricao,
         "concluida": False,
-        "criada_em": datetime.now()
+        "criada_em": datetime.now().isoformat(timespec="seconds")
     }
 
-#Retorna apenas id e titulo de tarefa
+# GET /tarefas: Lista todas as tarefas (somente id e titulo)
 @APP.get("/tarefas")
 async def tarefas():
-    listar_id_titulo = []
+    lista_somente_id_titulo = []
 
     for tarefa in TAREFAS:
         id_tarefa = tarefa['id']
         titulo_tarefa = tarefa['titulo']
-        listar_id_titulo.append({id_tarefa: titulo_tarefa})
 
-    return listar_id_titulo
+        lista_somente_id_titulo.append({id_tarefa: titulo_tarefa})
 
-# Função para criar tarefa
-@APP.post("/tarefas")
+    return lista_somente_id_titulo
+
+# POST /tarefas: Cria tarefa
+@APP.post("/tarefas", status_code=201)
 async def post_tarefa(titulo: str, descricao: str):
     global TAREFAS
 
@@ -47,34 +49,41 @@ async def post_tarefa(titulo: str, descricao: str):
 
     return {"mensagem": "OK"}
 
-# Consultando tarefa específica
+# GET /tarefas/{id}: Visualizar tarefa específica
 @APP.get("/tarefas/{id}")
-async def consulta_tarefa(id: int):
+async def tarefa_especifica(id: int):
     for tarefa in TAREFAS:
-        if id == int (tarefa['id']):
+        if id == int(tarefa["id"]):
             return tarefa
 
-# Conclui tarefa caso ela exista
-@APP.put("/tarefas/[id]")
+    return {"mensagem": "Tarefa não existe"}
+
+# PUT /tarefas/{id}: Atualiza tarefa específica
+@APP.put("/tarefas/{id}")
 async def concluir_tarefa(id: int):
     for tarefa in TAREFAS:
-        if id == int (tarefa['id']):
+        if id == int(tarefa['id']) and tarefa['concluida'] == False:
             tarefa['concluida'] = True
-            tarefa['concluida_em'] = datetime.now()
+            tarefa['concluida_em'] = datetime.now().isoformat(timespec='seconds')
+            titulo = tarefa['titulo']
 
-            resp = requests.post(f"http://localhost:8000/notificar?id={id}&titulo={titulo}")
+            try:
+                resp = requests.post(
+                    f"http://localhost:8000/notificar?id={id}&titulo={titulo}",
+                    timeout=1
+                )
+            except Exception as e:
+                print(e)
+                
+            return {"mensagem": "Tarefa atualizada"}
+    
+    return {"mensagem": "Tarefa não existe"}
 
-            print(resp.json())
-
-            return {"mensagem": "Tarefa Concluida!"}
-        
-    return {"mensagem:": "Tarefa não existe"}
-
-# Excluir uma tarefa
+# DELETE /tarefas/{id}: Exclui tarefa
 @APP.delete("/tarefas/{id}")
 async def apagar_tarefa(id: int):
     global TAREFAS
-    
+
     indice = 0
     for tarefa in TAREFAS:
         if id == int(tarefa['id']):
