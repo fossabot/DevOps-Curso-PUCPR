@@ -98,3 +98,7 @@ async def apagar_tarefa(id_tarefa: int):
 async def index():
     """Rota padrão index"""
     return {"mensagem": "Olá, mundo!"}
+@APP.get("/autor")
+async def autor():
+    """Rota para retornar o nome do autor da tarefa"""
+    return {"mensagem": "Gisele Ferreira da Silva"}
