@@ -1,86 +1,106 @@
 """Aplicação para o módulo de extensão DevOps"""
 
-from datetime import datetime
-from fastapi import FastAPI
+from datetime import datetime, timezone
+from fastapi import FastAPI, Depends
+from typing import Annotated
 import requests
+from sqlmodel import SQLModel, Session, create_engine, select
 from requests.exceptions import ConnectionError as RequestConnectionError
 
 from app.modelo import Tarefa
 
-APP = FastAPI()
+ENGINE = create_engine("mysql+pymysql://root:root@localhost:3306/devops")
+
+def criar_sessao():
+    """Cria uma sessão de banco de dados."""
+    with Session(ENGINE) as s:
+        yield s
+
+SESSAO = Annotated[Session, Depends(criar_sessao)]
+
+async def inicializacao(api: FastAPI):
+    print("Iniciando a API...")
+    SQLModel.metadata.create_all(ENGINE)
+    yield
+    print("Finalizando...")
+
+APP = FastAPI(lifespan=inicializacao)
 TAREFAS = []
 
 # GET /tarefas: Lista todas as tarefas (somente id e titulo)
 @APP.get("/tarefas")
-async def tarefas():
+async def tarefas(sessao: SESSAO) -> list[Tarefa]:
     """Rota para listar as tarefas."""
-    lista_somente_id_titulo = []
+    lista_tarefas = sessao.exec(select(Tarefa).offset(0)).all()
 
-    for tarefa in TAREFAS:
-        lista_somente_id_titulo.append(tarefa.resumir())
-
-    return lista_somente_id_titulo
+    return lista_tarefas
 
 # POST /tarefas: Cria tarefa
 @APP.post("/tarefas", status_code=201)
-async def post_tarefa(titulo: str, descricao: str = None):
+async def post_tarefa(sessao: SESSAO, titulo: str, descricao: str = None):
     """Rota para criar uma tarefa."""
     tarefa_nova = Tarefa(
-        _id=len(TAREFAS),
         titulo=titulo,
         descricao=descricao,
-        data_criacao=datetime.now().isoformat(timespec="seconds"),
+        data_criacao=datetime.now().astimezone(timezone.utc),
     )
 
-    TAREFAS.append(tarefa_nova)
+    sessao.add(tarefa_nova)
+    sessao.commit()
+    sessao.refresh(tarefa_nova)
 
     return {"mensagem": "OK"}
 
 # GET /tarefas/{id_tarefa}: Visualizar tarefa específica
 @APP.get("/tarefas/{id_tarefa}")
-async def tarefa_especifica(id_tarefa: int):
+async def tarefa_especifica(sessao: SESSAO, id_tarefa: int) -> Tarefa:
     """Rota para visualizar uma tarefa específica"""
-    for tarefa in TAREFAS:
-        if id_tarefa == tarefa.get_id():
-            return tarefa
+    # select * from tarefas where id == id_tarefa
+    regra = select(Tarefa).where(Tarefa.id == id_tarefa)
+    resultado = sessao.exec(regra).all()
+
+    if resultado:
+        return resultado[0]
 
     return {"mensagem": "Tarefa não existe"}
 
 # PUT /tarefas/{id}: Atualiza tarefa específica
 @APP.put("/tarefas/{id_tarefa}")
-async def concluir_tarefa(id_tarefa: int):
-    """Rota para atualizar uma tarefa"""
-    for tarefa in TAREFAS:
-        if id_tarefa == tarefa.get_id() and tarefa.concluida is False:
-            tarefa.finalizar()
-            titulo = tarefa.titulo
+async def concluir_tarefa(sessao: SESSAO, id_tarefa: int):
+    """Rota para concluir uma tarefa."""
+    regra = select(Tarefa).where(Tarefa.id == id_tarefa)
+    resultado = sessao.exec(regra).all()
 
-            try:
-                _ = requests.post(
-                    f"http://localhost:8000/notificar?id={tarefa.get_id()}&titulo={titulo}",
-                    timeout=1,
-                )
-            except RequestConnectionError as e:
-                print(e)
+    if not resultado:
+        return {"mensagem": "Tarefa não existe"}
 
-            return {"mensagem": "Tarefa atualizada"}
+    if resultado[0].concluida is True:
+        return {"mensagem": "Tarefa já finalizada"}
 
-    return {"mensagem": "Tarefa não existe"}
+    resultado[0].finalizar()
+
+    sessao.add(resultado[0])
+    sessao.commit()
+    sessao.refresh(resultado[0])
+
+    return {"mensagem": "Tarefa atualizada"}
 
 # DELETE /tarefas/{id_tarefa}: Exclui tarefa
 @APP.delete("/tarefas/{id_tarefa}")
-async def apagar_tarefa(id_tarefa: int):
+async def apagar_tarefa(sessao: SESSAO, id_tarefa: int):
     """Rota para apagar tarefa."""
+    regra = select(Tarefa).where(Tarefa.id == id_tarefa)
+    resultado = sessao.exec(regra).all()
 
-    indice = 0
-    for tarefa in TAREFAS:
-        if id_tarefa == tarefa.get_id():
-            TAREFAS.pop(indice)
-            return {"mensagem": "Tarefa apagada"}
+    if not resultado:
+        return {"mensagem": "Tarefa não existe"}
 
-        indice += 1
+    tarefa = resultado[0]
 
-    return {"mensagem": "Tarefa não existe"}
+    sessao.delete(tarefa)
+    sessao.commit()
+
+    return {"mensagem": "Tarefa excluída com sucesso"}
 
 @APP.get("/")
 async def index():
