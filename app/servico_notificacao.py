@@ -1,7 +1,9 @@
 """Aplicação de notificações"""
+
 from fastapi import FastAPI
 
 NOTIFICACAO = FastAPI()
+
 
 @NOTIFICACAO.post("/notificar")
 async def notificar(id_tarefa: int, titulo: str):

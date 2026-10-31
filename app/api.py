@@ -1,69 +1,90 @@
-"""Aplicação para o módulo de extensão DevOps"""
-import sys
-import os
+
+"""Aplicação para o módulo de extensão DevOps."""
+
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Annotated
+from functools import lru_cache
+from typing import Annotated, List
+import os
+
 from fastapi import FastAPI, Depends
 from sqlmodel import SQLModel, Session, create_engine, select
-from app.modelo import Tarefa
 
-DATABASE_USERNAME = os.environ.get("DATABASE_USERNAME")
-DATABASE_PASSWORD = os.environ.get("DATABASE_PASSWORD")
-DATABASE_ADDRESS = os.environ.get("DATABASE_ADDRESS")
-DATABASE = os.environ.get("DATABASE")
+from .modelo import Tarefa
 
-if DATABASE_USERNAME is None:
-    print("DATABASE_USERNAME está faltando")
-    sys.exit(1)
-if DATABASE_PASSWORD is None:
-    print("DATABASE_PASSWORD está faltando")
-    sys.exit(1)
-if DATABASE_ADDRESS is None:
-    print("DATABASE_ADDRESS está faltando")
-    sys.exit(1)
-if DATABASE is None:
-    print("DATABASE está faltando")
-    sys.exit(1)
 
-URL_BANCO = (
-    f"mysql+pymysql://{DATABASE_USERNAME}:{DATABASE_PASSWORD}"
-    f"@{DATABASE_ADDRESS}:3306/{DATABASE}"
-)
-ENGINE = create_engine(URL_BANCO)
+@lru_cache
+def obter_engine():
+    """Cria e retorna a conexão com o banco de dados MySQL."""
+
+    database_username = os.environ.get("DATABASE_USERNAME")
+    database_password = os.environ.get("DATABASE_PASSWORD")
+    database_address = os.environ.get("DATABASE_ADDRESS")
+    database = os.environ.get("DATABASE")
+
+    configuracoes = {
+        "DATABASE_USERNAME": database_username,
+        "DATABASE_PASSWORD": database_password,
+        "DATABASE_ADDRESS": database_address,
+        "DATABASE": database,
+    }
+
+    for nome, valor in configuracoes.items():
+        if not valor:
+            raise RuntimeError(f"{nome} está faltando")
+
+    return create_engine(
+        f"mysql+pymysql://{database_username}:{database_password}"
+        f"@{database_address}:3306/{database}"
+    )
+
 
 def criar_sessao():
-    """Cria uma sessão de banco de dados."""
-    with Session(ENGINE) as s:
-        yield s
+    """Função utilitária para criar sessão no banco de dados."""
+
+    with Session(obter_engine()) as sessao:
+        yield sessao
+
 
 SESSAO = Annotated[Session, Depends(criar_sessao)]
 
-async def inicializacao(_api: FastAPI):
-    """Função para inicializar a API com o banco de dados."""
-    print("Iniciando a API...")
-    SQLModel.metadata.create_all(ENGINE)
+
+@asynccontextmanager
+async def inicializacao(_: FastAPI):
+    """Função para inicialização da API e do banco de dados."""
+
+    SQLModel.metadata.create_all(obter_engine())
     yield
-    print("Finalizando...")
+
 
 APP = FastAPI(lifespan=inicializacao)
-TAREFAS = []
 
-# GET /tarefas: Lista todas as tarefas (somente id e titulo)
+
+# GET /tarefas: Lista todas as tarefas
 @APP.get("/tarefas")
-async def tarefas(sessao: SESSAO) -> list[Tarefa]:
+async def tarefas(sessao: SESSAO) -> List[Tarefa]:
     """Rota para listar as tarefas."""
+
     lista_tarefas = sessao.exec(select(Tarefa).offset(0)).all()
 
     return lista_tarefas
 
+
 # POST /tarefas: Cria tarefa
 @APP.post("/tarefas", status_code=201)
-async def post_tarefa(sessao: SESSAO, titulo: str, descricao: str = None):
+async def post_tarefa(
+    sessao: SESSAO,
+    titulo: str,
+    descricao: str = None
+):
     """Rota para criar uma tarefa."""
+
+    data = datetime.now().astimezone(timezone.utc).replace(microsecond=0)
+
     tarefa_nova = Tarefa(
         titulo=titulo,
         descricao=descricao,
-        data_criacao=datetime.now().astimezone(timezone.utc),
+        data_criacao=data,
     )
 
     sessao.add(tarefa_nova)
@@ -72,11 +93,12 @@ async def post_tarefa(sessao: SESSAO, titulo: str, descricao: str = None):
 
     return {"mensagem": "OK"}
 
-# GET /tarefas/{id_tarefa}: Visualizar tarefa específica
+
+# GET /tarefas/{id_tarefa}: Visualiza tarefa específica
 @APP.get("/tarefas/{id_tarefa}")
 async def tarefa_especifica(sessao: SESSAO, id_tarefa: int) -> Tarefa:
-    """Rota para visualizar uma tarefa específica"""
-    # select * from tarefas where id == id_tarefa
+    """Rota para visualizar uma tarefa específica."""
+
     regra = select(Tarefa).where(Tarefa.id == id_tarefa)
     resultado = sessao.exec(regra).all()
 
@@ -85,10 +107,12 @@ async def tarefa_especifica(sessao: SESSAO, id_tarefa: int) -> Tarefa:
 
     return {"mensagem": "Tarefa não existe"}
 
-# PUT /tarefas/{id}: Atualiza tarefa específica
+
+# PUT /tarefas/{id_tarefa}: Atualiza tarefa específica
 @APP.put("/tarefas/{id_tarefa}")
 async def concluir_tarefa(sessao: SESSAO, id_tarefa: int):
     """Rota para concluir uma tarefa."""
+
     regra = select(Tarefa).where(Tarefa.id == id_tarefa)
     resultado = sessao.exec(regra).all()
 
@@ -106,10 +130,12 @@ async def concluir_tarefa(sessao: SESSAO, id_tarefa: int):
 
     return {"mensagem": "Tarefa atualizada"}
 
+
 # DELETE /tarefas/{id_tarefa}: Exclui tarefa
 @APP.delete("/tarefas/{id_tarefa}")
 async def apagar_tarefa(sessao: SESSAO, id_tarefa: int):
     """Rota para apagar tarefa."""
+
     regra = select(Tarefa).where(Tarefa.id == id_tarefa)
     resultado = sessao.exec(regra).all()
 
@@ -121,15 +147,20 @@ async def apagar_tarefa(sessao: SESSAO, id_tarefa: int):
     sessao.delete(tarefa)
     sessao.commit()
 
-    return {"mensagem": "Tarefa excluída com sucesso"}
+    return {"mensagem": "Tarefa removida"}
 
+
+# GET /: Rota inicial
 @APP.get("/")
 async def index():
-    """Rota raíz."""
+    """Rota raiz."""
+
     return {"mensagem": "Olá, mundo!"}
 
-# um dicionário no formato {"mensagem": SEU NOME COMPLETO}
+
+# GET /autor: Retorna o autor da aplicação
 @APP.get("/autor")
 async def autor():
-    """Rota para retornar o autor da aplicação"""
+    """Rota para retornar o autor da aplicação."""
+
     return {"mensagem": "Gisele Ferreira da Silva"}
