@@ -4,8 +4,8 @@ RUN mkdir /app
 
 WORKDIR /app
 
-# Host -> Conteiner
-COPY app.py ./app.py
+#    Host  ->  Contêiner
+COPY app/ ./
 COPY requirements.txt ./requirements.txt
 
 RUN pip install --upgrade pip
