@@ -1,12 +1,10 @@
 """Aplicação para o módulo de extensão DevOps"""
-
-from datetime import datetime, timezone
-from fastapi import FastAPI, Depends
-from typing import Annotated
+import sys
 import os
+from datetime import datetime, timezone
+from typing import Annotated
+from fastapi import FastAPI, Depends
 from sqlmodel import SQLModel, Session, create_engine, select
-from requests.exceptions import ConnectionError as RequestConnectionError
-
 from app.modelo import Tarefa
 
 DATABASE_USERNAME = os.environ.get("DATABASE_USERNAME")
@@ -16,18 +14,22 @@ DATABASE = os.environ.get("DATABASE")
 
 if DATABASE_USERNAME is None:
     print("DATABASE_USERNAME está faltando")
-    exit(1)
+    sys.exit(1)
 if DATABASE_PASSWORD is None:
     print("DATABASE_PASSWORD está faltando")
-    exit(1)
+    sys.exit(1)
 if DATABASE_ADDRESS is None:
     print("DATABASE_ADDRESS está faltando")
-    exit(1)
+    sys.exit(1)
 if DATABASE is None:
     print("DATABASE está faltando")
-    exit(1)
+    sys.exit(1)
 
-ENGINE = create_engine(f"mysql+pymysql://{DATABASE_USERNAME}:{DATABASE_PASSWORD}@{DATABASE_ADDRESS}:3306/{DATABASE}")
+URL_BANCO = (
+    f"mysql+pymysql://{DATABASE_USERNAME}:{DATABASE_PASSWORD}"
+    f"@{DATABASE_ADDRESS}:3306/{DATABASE}"
+)
+ENGINE = create_engine(URL_BANCO)
 
 def criar_sessao():
     """Cria uma sessão de banco de dados."""
@@ -36,7 +38,8 @@ def criar_sessao():
 
 SESSAO = Annotated[Session, Depends(criar_sessao)]
 
-async def inicializacao(api: FastAPI):
+async def inicializacao(_api: FastAPI):
+    """Função para inicializar a API com o banco de dados."""
     print("Iniciando a API...")
     SQLModel.metadata.create_all(ENGINE)
     yield
