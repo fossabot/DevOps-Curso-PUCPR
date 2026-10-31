@@ -1,30 +1,31 @@
-"""Testes unitários do modelo.py"""
-from datetime import datetime
+from datetime import datetime, timezone
 from app.modelo import Tarefa
 
+
 def criar_tarefa_mock():
-    """Função para retornar uma versão teste da classe Tarefa"""
     return Tarefa(
-        _id=0,
         titulo="Tarefa teste",
-        data_criacao=datetime.now().isoformat(timespec="seconds"),
+        data_criacao=datetime.now().replace(microsecond=0),
     )
 
+
 def test_nova_tarefa():
-    """Função de teste para criar uma nova tarefa conforme a classe Tarefa"""
     t = criar_tarefa_mock()
 
-    assert t.get_id() == 0
+    assert t.get_id() == None
     assert t.titulo == "Tarefa teste"
-    assert t.descricao is None
-    assert t.data_criacao.isoformat() == datetime.now().isoformat(timespec="seconds")
-    assert t.data_conclusao is None
-    assert t.concluida is False
+    assert t.descricao == None
+    assert t.data_criacao == datetime.now().replace(microsecond=0)
+    assert t.data_conclusao == None
+    assert t.concluida == False
+
+
+# Implementar teste unitário para verificar se a tarefa foi concluida
+
 
 def test_tarefa_concluida():
-    """Função para conclusão da tarefa criada"""
     t = criar_tarefa_mock()
 
     t.finalizar()
-    assert t.concluida is True
-    assert t.data_conclusao == datetime.now().isoformat(timespec="seconds")
+    assert t.concluida == True
+    assert t.data_conclusao == datetime.now().astimezone(timezone.utc).replace(microsecond=0)
