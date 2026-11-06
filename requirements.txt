@@ -9,4 +9,4 @@ sqlmodel
 sqlalchemy
 pymysql
 pymysql
-psycopg
+psycopg[binary]
