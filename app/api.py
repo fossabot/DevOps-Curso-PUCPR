@@ -15,7 +15,7 @@ from .modelo import Tarefa
 
 @lru_cache
 def obter_engine():
-    """Cria e retorna a conexão com o banco de dados MySQL."""
+    """Cria e retorna a conexão com o banco de dados Postgres."""
 
     database_username = os.environ.get("DATABASE_USERNAME")
     database_password = os.environ.get("DATABASE_PASSWORD")
