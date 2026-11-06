@@ -35,7 +35,7 @@ def obter_engine():
 
     return create_engine(
         f"postgresql+psycopg://{database_username}:{database_password}"
-        f"@{database_address}:3306/{database}"
+        f"@{database_address}/{database}"
     )
 
 
