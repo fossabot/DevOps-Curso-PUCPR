@@ -34,7 +34,7 @@ def obter_engine():
             raise RuntimeError(f"{nome} está faltando")
 
     return create_engine(
-        f"mysql+pymysql://{database_username}:{database_password}"
+        f"postgresql+psycopg://{database_username}:{database_password}"
         f"@{database_address}:3306/{database}"
     )
 
